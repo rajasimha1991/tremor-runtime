@@ -152,6 +152,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-compression"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ae84766bab9f774e32979583ba56d6af8c701288c6dc99144819d5d2ee0b170f"
+dependencies = [
+ "bytes 0.5.4",
+ "futures-core",
+ "futures-io",
+ "memchr",
+ "pin-project-lite",
+ "xz2",
+]
+
+[[package]]
 name = "async-h1"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4896,6 +4910,7 @@ dependencies = [
 name = "tremor-runtime"
 version = "0.8.0"
 dependencies = [
+ "async-compression",
  "async-std",
  "async-trait",
  "async-tungstenite",
