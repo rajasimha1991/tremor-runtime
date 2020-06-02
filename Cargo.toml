@@ -16,6 +16,7 @@ members = [
     "tremor-script",
     "tremor-server",
     "tremor-tool",
+    "tremor-cli",
 ]
 
 [profile.release]
