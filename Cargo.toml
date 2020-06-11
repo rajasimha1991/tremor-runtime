@@ -56,6 +56,7 @@ threadpool = "1"
 tremor-pipeline = { path = "tremor-pipeline" }
 url = "2.1"
 async-tungstenite = { version = "0.7.1", features = ["async-std-runtime"] }
+value-trait = "0.1"
 
 
 log = "0.4"
@@ -121,7 +122,7 @@ neon = [ "simd-json/neon" ]
 gcp = [ "google-storage1", "google-pubsub1", "hyper-rustls", "yup-oauth2", "hyper" ]
 
 [patch.crates-io]
-#  waiting for https://github.com/http-rs/tide/pull/408
+cron = {git = "https://github.com/zslayton/cron"} # upstream cron since it has not been published yet
 
 # for use during debian packaging, via cargo-deb
 # https://github.com/mmstick/cargo-deb#packagemetadatadeb-options
