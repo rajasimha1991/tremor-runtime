@@ -776,7 +776,8 @@ dependencies = [
 [[package]]
 name = "cron"
 version = "0.6.1"
-source = "git+https://github.com/zslayton/cron#19591d69e5679f8d4696760a6a763ea05707601a"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab00a636277f7ea5d8dd92ac7a5099fc9a46e5327bba84d3640b41ae127eada9"
 dependencies = [
  "chrono",
  "error-chain 0.10.0",
@@ -3997,6 +3998,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "simd-json-derive"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9bc2f42519b400d0340c724e481770098c493354ebcfc97c39e0b992cbd700c5"
+dependencies = [
+ "chrono",
+ "itoa",
+ "ryu",
+ "simd-json",
+ "simd-json-derive-int",
+ "value-trait",
+]
+
+[[package]]
+name = "simd-json-derive-int"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "304d824b2135caeb4a2d269bd7ae5a817e5134ff5d12ee3dbb1672b9476904e9"
+dependencies = [
+ "proc-macro2",
+ "quote 1.0.6",
+ "simd-json",
+ "syn 1.0.30",
+]
+
+[[package]]
 name = "siphasher"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4897,6 +4924,7 @@ dependencies = [
  "serde_derive",
  "serde_yaml",
  "simd-json",
+ "simd-json-derive",
  "sled",
  "tremor-influx 0.1.0",
  "tremor-script",
@@ -4967,6 +4995,7 @@ dependencies = [
  "serde_derive",
  "serde_yaml",
  "simd-json",
+ "simd-json-derive",
  "snap",
  "surf",
  "tempfile",
@@ -5014,6 +5043,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "simd-json",
+ "simd-json-derive",
  "sketches-ddsketch",
  "termcolor",
  "tremor-influx 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
