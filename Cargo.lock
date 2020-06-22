@@ -4020,7 +4020,7 @@ dependencies = [
  "proc-macro2",
  "quote 1.0.7",
  "simd-json",
- "syn 1.0.31",
+ "syn 1.0.33",
 ]
 
 [[package]]
@@ -4314,7 +4314,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e8d5d96e8cbb005d6959f119f773bfaebb5684296108fb32600c00cde305b2cd"
 dependencies = [
  "proc-macro2",
- "quote 1.0.6",
+ "quote 1.0.7",
  "unicode-xid 0.2.1",
 ]
 
@@ -4910,6 +4910,7 @@ name = "tremor-pipeline"
 version = "0.8.0"
 dependencies = [
  "base64 0.12.3",
+ "byteorder",
  "criterion",
  "error-chain 0.12.2",
  "halfbrown",
