@@ -159,11 +159,13 @@ impl Elastic {
                 ..Event::default()
             };
 
-            for (pid, p) in &mut pipelines {
-                if p.send_insight(insight.clone()).is_err() {
-                    error!("Failed to send contraflow to pipeline {}", pid)
-                };
-            }
+            task::block_on(async {
+                for (pid, p) in &mut pipelines {
+                    if p.send_insight(insight.clone()).await.is_err() {
+                        error!("Failed to send contraflow to pipeline {}", pid)
+                    };
+                }
+            });
             // TODO: Handle contraflow for notification
             if let Err(e) = tx.send(r) {
                 error!("Failed to send reply: {}", e)
@@ -190,11 +192,13 @@ impl Elastic {
                     .iter()
                     .map(|(i, p)| (i.clone(), p.clone()))
                     .collect();
-                for (pid, p) in &mut pipelines {
-                    if p.send_insight(insight.clone()).is_err() {
-                        error!("Failed to send contraflow to pipeline {}", pid)
-                    };
-                }
+                task::block_on(async {
+                    for (pid, p) in &mut pipelines {
+                        if p.send_insight(insight.clone()).await.is_err() {
+                            error!("Failed to send contraflow to pipeline {}", pid)
+                        };
+                    }
+                });
 
                 error!("Dropped data due to es overload");
                 Err("Dropped data due to es overload".into())
@@ -211,10 +215,10 @@ impl Elastic {
         }
     }
 }
-
+#[async_trait::async_trait]
 impl Offramp for Elastic {
     // We enforce json here!
-    fn on_event(&mut self, _codec: &dyn Codec, _input: &str, event: Event) -> Result<()> {
+    async fn on_event(&mut self, _codec: &dyn Codec, _input: &str, event: Event) -> Result<()> {
         // We estimate a single message is 512 byte on everage, might be off but it's
         // a guess
         let mut payload = Vec::with_capacity(4096);
@@ -258,7 +262,7 @@ impl Offramp for Elastic {
         self.maybe_enque(op_meta, payload)
     }
 
-    fn on_signal(&mut self, _event: Event) -> Option<Event> {
+    async fn on_signal(&mut self, _event: Event) -> Option<Event> {
         None
     }
 
@@ -272,7 +276,7 @@ impl Offramp for Elastic {
         self.pipelines.remove(&id);
         self.pipelines.is_empty()
     }
-    fn start(&mut self, _codec: &dyn Codec, postprocessors: &[String]) -> Result<()> {
+    async fn start(&mut self, _codec: &dyn Codec, postprocessors: &[String]) -> Result<()> {
         self.postprocessors = make_postprocessors(postprocessors)?;
         Ok(())
     }

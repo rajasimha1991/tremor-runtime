@@ -156,7 +156,7 @@ async fn onramp_loop(
 
             },
             msg = rx.recv().fuse() => if let Ok(msg) = msg {
-                match handle_pipelines_msg(msg, &mut pipelines, &mut metrics_reporter)? {
+                match handle_pipelines_msg(msg, &mut pipelines, &mut metrics_reporter).await? {
                     PipeHandlerResult::Idle | PipeHandlerResult::Normal => continue,
                     PipeHandlerResult::Terminate => break,
                     _ => continue,

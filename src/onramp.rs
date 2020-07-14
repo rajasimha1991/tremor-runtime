@@ -20,7 +20,6 @@ use crate::source::{blaster, crononome, file, kafka, metronome, tcp};
 use crate::url::TremorURL;
 use async_std::sync::{self, channel};
 use async_std::task::{self, JoinHandle};
-use crossbeam_channel::Sender as CbSender;
 use serde_yaml::Value;
 use std::fmt;
 
@@ -41,7 +40,10 @@ pub(crate) trait Impl {
 #[derive(Clone, Debug)]
 pub enum Msg {
     Connect(Vec<(TremorURL, pipeline::Addr)>),
-    Disconnect { id: TremorURL, tx: CbSender<bool> },
+    Disconnect {
+        id: TremorURL,
+        tx: sync::Sender<bool>,
+    },
     Cb(CBAction, Ids),
 }
 

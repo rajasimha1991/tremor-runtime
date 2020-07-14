@@ -121,14 +121,15 @@ impl Ws {
                 WSResult::Disconnected => self.addr = None,
                 WSResult::Ack(id) => {
                     for p in self.pipelines.values_mut() {
-                        if let Err(e) = p.send_insight(Event::cb_ack(ingest_ns, id.clone())) {
+                        if let Err(e) = p.send_insight(Event::cb_ack(ingest_ns, id.clone())).await {
                             error!("[WS Offramp] failed to return CB data: {}", e);
                         }
                     }
                 }
                 WSResult::Fail(id) => {
                     for p in self.pipelines.values_mut() {
-                        if let Err(e) = p.send_insight(Event::cb_fail(ingest_ns, id.clone())) {
+                        if let Err(e) = p.send_insight(Event::cb_fail(ingest_ns, id.clone())).await
+                        {
                             error!("[WS Offramp] failed to return CB data: {}", e);
                         }
                     }
@@ -139,6 +140,7 @@ impl Ws {
         new_connect
     }
 }
+#[async_trait::async_trait]
 impl Offramp for Ws {
     fn auto_ack(&self) -> bool {
         false
@@ -148,20 +150,20 @@ impl Offramp for Ws {
         self.addr.is_some()
     }
 
-    fn on_signal(&mut self, event: Event) -> Option<Event> {
+    async fn on_signal(&mut self, event: Event) -> Option<Event> {
         task::block_on(async {
             let was_connected = self.addr.is_some();
             let new_connect = self.update_ws_state(event.ingest_ns).await;
 
             if was_connected && !new_connect {
                 for p in self.pipelines.values_mut() {
-                    if let Err(e) = p.send_insight(Event::cb_trigger(event.ingest_ns)) {
+                    if let Err(e) = p.send_insight(Event::cb_trigger(event.ingest_ns)).await {
                         error!("[WS Offramp] failed to return CB data: {}", e);
                     }
                 }
             } else if !was_connected && new_connect {
                 for p in self.pipelines.values_mut() {
-                    if let Err(e) = p.send_insight(Event::cb_restore(event.ingest_ns)) {
+                    if let Err(e) = p.send_insight(Event::cb_restore(event.ingest_ns)).await {
                         error!("[WS Offramp] failed to return CB data: {}", e);
                     }
                 }
@@ -170,7 +172,7 @@ impl Offramp for Ws {
         None
     }
 
-    fn on_event(&mut self, codec: &dyn Codec, _input: &str, event: Event) -> Result<()> {
+    async fn on_event(&mut self, codec: &dyn Codec, _input: &str, event: Event) -> Result<()> {
         task::block_on(async {
             let was_connected = self.addr.is_some();
             let new_connect = self.update_ws_state(event.ingest_ns).await;
@@ -178,7 +180,7 @@ impl Offramp for Ws {
             if let Some(addr) = &self.addr {
                 if new_connect && !was_connected {
                     for p in self.pipelines.values_mut() {
-                        if let Err(e) = p.send_insight(Event::cb_restore(event.ingest_ns)) {
+                        if let Err(e) = p.send_insight(Event::cb_restore(event.ingest_ns)).await {
                             error!("[WS Offramp] failed to return CB data: {}", e);
                         }
                     }
@@ -199,11 +201,12 @@ impl Offramp for Ws {
                 }
             } else {
                 for p in self.pipelines.values_mut() {
-                    if let Err(e) = p.send_insight(Event::cb_trigger(event.ingest_ns)) {
+                    if let Err(e) = p.send_insight(Event::cb_trigger(event.ingest_ns)).await {
                         error!("[WS Offramp] failed to return CB data: {}", e);
                     }
-                    if let Err(e) =
-                        p.send_insight(Event::cb_fail(event.ingest_ns, event.id.clone()))
+                    if let Err(e) = p
+                        .send_insight(Event::cb_fail(event.ingest_ns, event.id.clone()))
+                        .await
                     {
                         error!("[WS Offramp] failed to return CB data: {}", e);
                     }
@@ -224,7 +227,7 @@ impl Offramp for Ws {
     fn default_codec(&self) -> &str {
         "json"
     }
-    fn start(&mut self, _codec: &dyn Codec, postprocessors: &[String]) -> Result<()> {
+    async fn start(&mut self, _codec: &dyn Codec, postprocessors: &[String]) -> Result<()> {
         self.postprocessors = make_postprocessors(postprocessors)?;
         Ok(())
     }

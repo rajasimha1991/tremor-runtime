@@ -149,7 +149,7 @@ where
         }
     }
 
-    fn handle_pipelines_msg(&mut self, msg: onramp::Msg) -> Result<PipeHandlerResult> {
+    async fn handle_pipelines_msg(&mut self, msg: onramp::Msg) -> Result<PipeHandlerResult> {
         if self.pipelines.is_empty() {
             match msg {
                 onramp::Msg::Connect(ps) => {
@@ -157,17 +157,18 @@ where
                         if p.0 == *METRICS_PIPELINE {
                             self.metrics_reporter.set_metrics_pipeline(p.clone());
                         } else {
-                            p.1.send(pipeline::Msg::ConnectOnramp(
+                            p.1.send_mgmt(pipeline::MgmtMsg::ConnectOnramp(
                                 self.source_id.clone(),
                                 self.tx.clone(),
-                            ))?;
+                            ))
+                            .await?;
                             self.pipelines.push(p.clone());
                         }
                     }
                     Ok(PipeHandlerResult::Idle)
                 }
                 onramp::Msg::Disconnect { tx, .. } => {
-                    tx.send(true)?;
+                    tx.send(true).await;
                     Ok(PipeHandlerResult::Terminate)
                 }
                 onramp::Msg::Cb(cb, ids) => Ok(PipeHandlerResult::Cb(cb, ids)),
@@ -176,10 +177,11 @@ where
             match msg {
                 onramp::Msg::Connect(mut ps) => {
                     for p in &ps {
-                        p.1.send(pipeline::Msg::ConnectOnramp(
+                        p.1.send_mgmt(pipeline::MgmtMsg::ConnectOnramp(
                             self.source_id.clone(),
                             self.tx.clone(),
-                        ))?;
+                        ))
+                        .await?;
                     }
                     self.pipelines.append(&mut ps);
                     Ok(PipeHandlerResult::Normal)
@@ -187,15 +189,17 @@ where
                 onramp::Msg::Disconnect { id, tx } => {
                     for (pid, p) in &self.pipelines {
                         if pid == &id {
-                            p.send(pipeline::Msg::DisconnectInput(id.clone()))?;
+                            p.send_mgmt(pipeline::MgmtMsg::DisconnectInput(id.clone()))
+                                .await?;
                         }
                     }
+
                     self.pipelines.retain(|(pipeline, _)| pipeline != &id);
                     if self.pipelines.is_empty() {
-                        tx.send(true)?;
+                        tx.send(true).await;
                         Ok(PipeHandlerResult::Terminate)
                     } else {
-                        tx.send(false)?;
+                        tx.send(false).await;
                         Ok(PipeHandlerResult::Normal)
                     }
                 }
@@ -207,12 +211,12 @@ where
     async fn handle_pipelines(&mut self) -> Result<PipeHandlerResult> {
         if self.pipelines.is_empty() || self.triggered {
             let msg = self.rx.recv().await?;
-            self.handle_pipelines_msg(msg)
+            self.handle_pipelines_msg(msg).await
         } else if self.rx.is_empty() {
             Ok(PipeHandlerResult::Normal)
         } else {
             let msg = self.rx.recv().await?;
-            self.handle_pipelines_msg(msg)
+            self.handle_pipelines_msg(msg).await
         }
     }
 
@@ -352,10 +356,22 @@ where
                 }
             }
 
-            let pipelines_empty = self.pipelines.is_empty();
-            let all_ready = self.pipelines.iter_mut().all(|(_, p)| p.drain_ready());
+            if !self.pipelines.iter_mut().all(|(_, p)| p.drain_ready()) {
+                use rand::prelude::*;
+                let mut rng = rand::thread_rng();
+                let y: f64 = rng.gen(); // generates a float between 0 and 1
+                if y < 0.00001 {
+                    dbg!(self.rx.len());
+                    for (_id, p) in &self.pipelines {
+                        println!("{}: {}", p.id(), p.len());
+                    }
+                }
+                continue;
+            }
 
-            if !self.triggered && !pipelines_empty && all_ready {
+            let pipelines_empty = self.pipelines.is_empty();
+
+            if !self.triggered && !pipelines_empty {
                 match self.source.read(self.id).await? {
                     SourceReply::StartStream(id) => {
                         while self.preprocessors.len() <= id {

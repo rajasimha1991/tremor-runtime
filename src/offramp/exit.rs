@@ -40,8 +40,9 @@ impl offramp::Impl for Exit {
     }
 }
 
+#[async_trait::async_trait]
 impl Offramp for Exit {
-    fn on_event(&mut self, _codec: &dyn Codec, _input: &str, event: Event) -> Result<()> {
+    async fn on_event(&mut self, _codec: &dyn Codec, _input: &str, event: Event) -> Result<()> {
         for (value, _meta) in event.value_meta_iter() {
             if let Some(status) = value.get("exit").and_then(Value::as_i32) {
                 if let Some(delay) = value.get("delay").and_then(Value::as_u64) {
@@ -65,7 +66,7 @@ impl Offramp for Exit {
     fn default_codec(&self) -> &str {
         "json"
     }
-    fn start(&mut self, _codec: &dyn Codec, postprocessors: &[String]) -> Result<()> {
+    async fn start(&mut self, _codec: &dyn Codec, postprocessors: &[String]) -> Result<()> {
         self.postprocessors = make_postprocessors(postprocessors)?;
         Ok(())
     }

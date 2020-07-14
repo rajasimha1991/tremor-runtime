@@ -54,6 +54,7 @@ pub(crate) mod lifecycle;
 pub mod metrics;
 pub(crate) mod offramp;
 pub(crate) mod onramp;
+pub(crate) mod permge;
 pub(crate) mod pipeline;
 pub(crate) mod postprocessor;
 pub(crate) mod preprocessor;

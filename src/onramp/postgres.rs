@@ -25,6 +25,7 @@ use chrono::prelude::*;
 use postgres::{Client, NoTls};
 use serde_yaml::Value;
 use simd_json::prelude::*;
+use std::thread;
 use std::time::Duration;
 use tokio_postgres::error::SqlState;
 

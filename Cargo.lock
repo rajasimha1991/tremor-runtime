@@ -4985,6 +4985,7 @@ dependencies = [
  "matches",
  "memmap",
  "mio 0.7.0",
+ "pin-project-lite",
  "postgres",
  "postgres-protocol",
  "pretty_assertions",

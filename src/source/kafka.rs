@@ -30,6 +30,7 @@ use serde_yaml::Value;
 use std::collections::BTreeMap;
 use std::collections::HashMap as StdMap;
 use std::mem::{self, transmute};
+use std::thread;
 use std::time::Duration;
 
 #[derive(Deserialize, Debug, Clone)]

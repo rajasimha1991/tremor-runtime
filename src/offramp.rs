@@ -22,13 +22,11 @@ use crate::system::METRICS_PIPELINE;
 use crate::url::TremorURL;
 use crate::utils::nanotime;
 use crate::{Event, OpConfig};
-use async_std::sync::channel;
+use async_std::sync::{self, channel};
 use async_std::task::{self, JoinHandle};
-use crossbeam_channel::{bounded, Sender as CbSender};
 use hashbrown::HashMap;
 use std::borrow::{Borrow, Cow};
 use std::fmt;
-use std::thread;
 use tremor_pipeline::CBAction;
 
 mod debug;
@@ -58,30 +56,31 @@ pub enum Msg {
     },
     Disconnect {
         id: TremorURL,
-        tx: CbSender<bool>,
+        tx: sync::Sender<bool>,
     },
 }
 
 pub(crate) type Sender = async_std::sync::Sender<ManagerMsg>;
-pub type Addr = CbSender<Msg>;
+pub type Addr = sync::Sender<Msg>;
 
 // We allow this here since we can't pass in &dyn Code as that would taint the
 // overlying object with lifetimes.
 // We also can't pass in Box<dyn Codec> as that would try to move it out of
 // borrowed contest
 #[allow(unused_variables)]
+#[async_trait::async_trait]
 pub trait Offramp: Send {
     fn ready(&mut self) -> bool {
         true
     }
-    fn start(&mut self, codec: &dyn Codec, postprocessors: &[String]) -> Result<()>;
-    fn on_event(&mut self, codec: &dyn Codec, input: &str, event: Event) -> Result<()>;
+    async fn start(&mut self, codec: &dyn Codec, postprocessors: &[String]) -> Result<()>;
+    async fn on_event(&mut self, codec: &dyn Codec, input: &str, event: Event) -> Result<()>;
+    async fn on_signal(&mut self, signal: Event) -> Option<Event> {
+        None
+    }
     fn default_codec(&self) -> &str;
     fn add_pipeline(&mut self, id: TremorURL, addr: pipeline::Addr);
     fn remove_pipeline(&mut self, id: TremorURL) -> bool;
-    fn on_signal(&mut self, signal: Event) -> Option<Event> {
-        None
-    }
     fn is_active(&self) -> bool {
         true
     }
@@ -144,13 +143,13 @@ pub(crate) struct Manager {
     qsize: usize,
 }
 
-fn send_to_pipelines(
+async fn send_to_pipelines(
     offramp_id: &TremorURL,
     pipelines: &mut HashMap<TremorURL, pipeline::Addr>,
     e: &Event,
 ) {
     for p in pipelines.values_mut() {
-        if let Err(e) = p.send_insight(e.clone()) {
+        if let Err(e) = p.send_insight(e.clone()).await {
             error!("[Offramp::{}] Counterflow error: {}", offramp_id, e);
         };
     }
@@ -172,22 +171,22 @@ impl Manager {
             id,
         }: Create,
     ) {
-        if let Err(e) = offramp.start(codec.borrow(), &postprocessors) {
+        if let Err(e) = offramp.start(codec.borrow(), &postprocessors).await {
             error!("Failed to create onramp {}: {}", id, e);
             return;
         }
 
-        let (tx, rx) = bounded(self.qsize);
+        let (tx, rx) = channel(self.qsize);
         let offramp_id = id.clone();
-        thread::spawn(move || {
+        task::spawn(async move {
             let mut pipelines: HashMap<TremorURL, pipeline::Addr> = HashMap::new();
             info!("[Offramp::{}] started", offramp_id);
 
-            for m in rx {
+            while let Ok(m) = rx.recv().await {
                 match m {
                     Msg::Signal(signal) => {
-                        if let Some(insight) = offramp.on_signal(signal) {
-                            send_to_pipelines(&offramp_id, &mut pipelines, &insight);
+                        if let Some(insight) = offramp.on_signal(signal).await {
+                            send_to_pipelines(&offramp_id, &mut pipelines, &insight).await;
                         }
                     }
                     Msg::Event { event, input } => {
@@ -199,7 +198,10 @@ impl Manager {
                         let mut e = Event::cb_ack(ingest_ns, event.id.clone());
 
                         // TODO FIXME implement postprocessors
-                        if let Err(err) = offramp.on_event(codec.borrow(), input.borrow(), event) {
+                        if let Err(err) = offramp
+                            .on_event(codec.borrow(), input.borrow(), event)
+                            .await
+                        {
                             error!("[Offramp::{}] On Event error: {}", offramp_id, err);
                             metrics_reporter.increment_error();
                             e.cb = Some(CBAction::Fail);
@@ -207,7 +209,7 @@ impl Manager {
                             metrics_reporter.increment_out();
                         };
                         if offramp.auto_ack() {
-                            send_to_pipelines(&offramp_id, &mut pipelines, &e);
+                            send_to_pipelines(&offramp_id, &mut pipelines, &e).await;
                         }
                     }
                     Msg::Connect { id, mut addr } => {
@@ -224,7 +226,7 @@ impl Manager {
                             } else {
                                 Event::cb_trigger(nanotime())
                             };
-                            if let Err(e) = addr.send_insight(insight) {
+                            if let Err(e) = addr.send_insight(insight).await {
                                 error!(
                                     "[Offramp::{}] Could not send initial insight to {}: {}",
                                     offramp_id, id, e
@@ -243,9 +245,7 @@ impl Manager {
                         if r {
                             info!("[Offramp::{}] Marked as done ", offramp_id);
                         }
-                        if let Err(e) = tx.send(r) {
-                            error!("Failed to send reply: {}", e)
-                        }
+                        tx.send(r).await
                     }
                 }
             }
