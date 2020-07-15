@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use crate::{offramp::prelude::*, pipeline};
-use async_std::sync::{channel, Receiver, Sender};
+use async_channel::{bounded, Receiver, Sender};
 use async_tungstenite::async_std::connect_async;
 use futures::SinkExt;
 use halfbrown::HashMap;
@@ -57,18 +57,18 @@ impl Default for WSResult {
         WSResult::Disconnected
     }
 }
-async fn ws_loop(url: String, offramp_tx: Sender<WSResult>) {
+async fn ws_loop(url: String, offramp_tx: Sender<WSResult>) -> Result<()> {
     loop {
         let mut ws_stream = if let Ok((ws_stream, _)) = connect_async(&url).await {
             ws_stream
         } else {
             error!("Failed to connect to {}, retrying in 1s", url);
-            offramp_tx.send(WSResult::Disconnected).await;
+            offramp_tx.send(WSResult::Disconnected).await?;
             task::sleep(Duration::from_secs(1)).await;
             continue;
         };
-        let (tx, rx) = channel(64);
-        offramp_tx.send(WSResult::Connected(tx)).await;
+        let (tx, rx) = bounded(64);
+        offramp_tx.send(WSResult::Connected(tx)).await?;
 
         while let Ok((id, msg)) = rx.recv().await {
             let r = match msg {
@@ -80,10 +80,10 @@ async fn ws_loop(url: String, offramp_tx: Sender<WSResult>) {
                     "Websocket send error: {} for endppoint {}, reconnecting",
                     e, url
                 );
-                offramp_tx.send(WSResult::Fail(id)).await;
+                offramp_tx.send(WSResult::Fail(id)).await?;
                 break;
             } else {
-                offramp_tx.send(WSResult::Ack(id)).await;
+                offramp_tx.send(WSResult::Ack(id)).await?;
             }
         }
     }
@@ -95,7 +95,7 @@ impl offramp::Impl for Ws {
             let config: Config = serde_yaml::from_value(config.clone())?;
             // Ensure we have valid url
             Url::parse(&config.url)?;
-            let (tx, rx) = channel(1);
+            let (tx, rx) = bounded(1);
 
             task::spawn(ws_loop(config.url.clone(), tx));
 
@@ -190,9 +190,10 @@ impl Offramp for Ws {
                     let datas = postprocess(&mut self.postprocessors, event.ingest_ns, raw)?;
                     for raw in datas {
                         if self.config.binary {
-                            addr.send((event.id.clone(), WsMessage::Binary(raw))).await;
+                            addr.send((event.id.clone(), WsMessage::Binary(raw)))
+                                .await?;
                         } else if let Ok(txt) = String::from_utf8(raw) {
-                            addr.send((event.id.clone(), WsMessage::Text(txt))).await;
+                            addr.send((event.id.clone(), WsMessage::Text(txt))).await?;
                         } else {
                             error!("[WS Offramp] Invalid utf8 data for text message");
                             return Err(Error::from("Invalid utf8 data for text message"));

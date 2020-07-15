@@ -285,10 +285,10 @@ async fn run_dun() -> Result<()> {
             error!("API Error: {}", e);
         }
         warn!("API stopped");
-        world.stop().await;
+        world.stop().await?;
     }
 
-    handle.await;
+    handle.await?;
     warn!("World stopped");
     Ok(())
 }

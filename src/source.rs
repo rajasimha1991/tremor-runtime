@@ -20,10 +20,9 @@ use crate::system::METRICS_PIPELINE;
 use crate::url::TremorURL;
 use crate::utils::nanotime;
 use crate::Result;
-use async_std::sync::{self, channel, Receiver};
+use async_channel::{self, bounded, Receiver, Sender};
 use async_std::task;
 use std::time::Duration;
-use sync::Sender;
 use tremor_pipeline::{CBAction, Event, EventOriginUri, Ids};
 use tremor_script::LineValue;
 
@@ -168,7 +167,7 @@ where
                     Ok(PipeHandlerResult::Idle)
                 }
                 onramp::Msg::Disconnect { tx, .. } => {
-                    tx.send(true).await;
+                    tx.send(true).await?;
                     Ok(PipeHandlerResult::Terminate)
                 }
                 onramp::Msg::Cb(cb, ids) => Ok(PipeHandlerResult::Cb(cb, ids)),
@@ -196,10 +195,10 @@ where
 
                     self.pipelines.retain(|(pipeline, _)| pipeline != &id);
                     if self.pipelines.is_empty() {
-                        tx.send(true).await;
+                        tx.send(true).await?;
                         Ok(PipeHandlerResult::Terminate)
                     } else {
-                        tx.send(false).await;
+                        tx.send(false).await?;
                         Ok(PipeHandlerResult::Normal)
                     }
                 }
@@ -212,11 +211,10 @@ where
         if self.pipelines.is_empty() || self.triggered {
             let msg = self.rx.recv().await?;
             self.handle_pipelines_msg(msg).await
-        } else if self.rx.is_empty() {
-            Ok(PipeHandlerResult::Normal)
-        } else {
-            let msg = self.rx.recv().await?;
+        } else if let Ok(msg) = self.rx.try_recv() {
             self.handle_pipelines_msg(msg).await
+        } else {
+            Ok(PipeHandlerResult::Normal)
         }
     }
 
@@ -279,7 +277,7 @@ where
         codec: &str,
         metrics_reporter: RampReporter,
     ) -> Result<(Self, Sender<onramp::Msg>)> {
-        let (tx, rx) = channel(64);
+        let (tx, rx) = bounded(15);
         let codec = codec::lookup(&codec)?;
         let pp_template = preprocessors.to_vec();
         let preprocessors = vec![Some(make_preprocessors(&pp_template)?)];
@@ -357,15 +355,16 @@ where
             }
 
             if !self.pipelines.iter_mut().all(|(_, p)| p.drain_ready()) {
-                use rand::prelude::*;
-                let mut rng = rand::thread_rng();
-                let y: f64 = rng.gen(); // generates a float between 0 and 1
-                if y < 0.00001 {
-                    dbg!(self.rx.len());
-                    for (_id, p) in &self.pipelines {
-                        println!("{}: {}", p.id(), p.len());
-                    }
-                }
+                // use rand::prelude::*;
+                // let mut rng = rand::thread_rng();
+                // let y: f64 = rng.gen(); // generates a float between 0 and 1
+                // if y < 0.0000001 {
+                //     dbg!(&self.rx);
+                //     // for (_id, p) in &self.pipelines {
+                //     //     println!("{}: {}", p.id(), p.len());
+                //     // }
+                // }
+                task::yield_now().await;
                 continue;
             }
 

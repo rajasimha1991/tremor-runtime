@@ -33,14 +33,13 @@
 use crate::offramp::prelude::make_postprocessors;
 use crate::offramp::prelude::*;
 use crate::postprocessor::Postprocessors;
-use crossbeam_channel::bounded;
+use async_channel::bounded;
 use elastic::prelude::*;
 use halfbrown::HashMap;
 use simd_json::borrowed::Object;
 use simd_json::json;
 use std::str;
 use std::time::Instant;
-use threadpool::ThreadPool;
 use tremor_pipeline::OpMeta;
 use tremor_script::prelude::*;
 
@@ -65,7 +64,6 @@ pub struct Elastic {
     client_idx: usize,
     clients: Vec<Destination>,
     // config: Config,
-    pool: ThreadPool,
     queue: AsyncSink<u64>,
     // hostname: String,
     pipelines: HashMap<TremorURL, pipeline::Addr>,
@@ -88,7 +86,6 @@ impl offramp::Impl for Elastic {
                 .collect();
             let clients = clients?;
 
-            let pool = ThreadPool::new(config.concurrency);
             let queue = AsyncSink::new(config.concurrency);
             //let hostname = match hostname::get() {
             //    Some(h) => h,
@@ -100,7 +97,6 @@ impl offramp::Impl for Elastic {
                 pipelines: HashMap::new(),
                 postprocessors: vec![],
                 // config,
-                pool,
                 clients,
                 queue,
                 // hostname,
@@ -133,7 +129,7 @@ impl Elastic {
             .iter()
             .map(|(i, p)| (i.clone(), p.clone()))
             .collect();
-        self.pool.execute(move || {
+        task::spawn(async move {
             let r = Self::flush(&destination.client, payload);
             let mut m = Value::object_with_capacity(2);
 
@@ -159,15 +155,14 @@ impl Elastic {
                 ..Event::default()
             };
 
-            task::block_on(async {
-                for (pid, p) in &mut pipelines {
-                    if p.send_insight(insight.clone()).await.is_err() {
-                        error!("Failed to send contraflow to pipeline {}", pid)
-                    };
-                }
-            });
+            for (pid, p) in &mut pipelines {
+                if p.send_insight(insight.clone()).await.is_err() {
+                    error!("Failed to send contraflow to pipeline {}", pid)
+                };
+            }
+
             // TODO: Handle contraflow for notification
-            if let Err(e) = tx.send(r) {
+            if let Err(e) = tx.send(r).await {
                 error!("Failed to send reply: {}", e)
             }
         });

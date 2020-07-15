@@ -30,6 +30,7 @@ opt-level = 3
 [dependencies]
 async-std = {version = "1.6", features = ["unstable"]}
 async-trait = "0.1"
+async-channel = "1"
 async-compression = {version = "0.3", features = ["xz", "futures-bufread", "stream"]}
 base64 = "0.12"
 bytes = "0.5"
@@ -53,7 +54,6 @@ serde = "1"
 serde_yaml = "0.8"
 simd-json = {version = "0.3", features = ["known-key"]}
 simd-json-derive = "0.1"
-threadpool = "1"
 tremor-pipeline = { path = "tremor-pipeline" }
 url = "2.1"
 async-tungstenite = { version = "0.7.1", features = ["async-std-runtime"] }
@@ -71,8 +71,6 @@ lz4 = "1.23.2"
 tremor-script = { path = "tremor-script" }
 tremor-influx = { path = "tremor-influx" }
 indexmap = { version = "1", features = [ "serde-1" ] }
-
-crossbeam-channel = "0.4"
 
 memmap = { version = "0.7.0" }
 tempfile = { version = "3.1" }
@@ -125,6 +123,7 @@ gcp = [ "google-storage1", "google-pubsub1", "hyper-rustls", "yup-oauth2", "hype
 
 [patch.crates-io]
 # cron = {git = "https://github.com/zslayton/cron"} # upstream cron since it has not been published yet
+# async-channel = { path = "../async-channel" }
 
 # for use during debian packaging, via cargo-deb
 # https://github.com/mmstick/cargo-deb#packagemetadatadeb-options

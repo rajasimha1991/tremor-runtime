@@ -22,7 +22,7 @@ use crate::system::METRICS_PIPELINE;
 use crate::url::TremorURL;
 use crate::utils::nanotime;
 use crate::{Event, OpConfig};
-use async_std::sync::{self, channel};
+use async_channel::{self, bounded};
 use async_std::task::{self, JoinHandle};
 use hashbrown::HashMap;
 use std::borrow::{Borrow, Cow};
@@ -56,12 +56,12 @@ pub enum Msg {
     },
     Disconnect {
         id: TremorURL,
-        tx: sync::Sender<bool>,
+        tx: async_channel::Sender<bool>,
     },
 }
 
-pub(crate) type Sender = async_std::sync::Sender<ManagerMsg>;
-pub type Addr = sync::Sender<Msg>;
+pub(crate) type Sender = async_channel::Sender<ManagerMsg>;
+pub type Addr = async_channel::Sender<Msg>;
 
 // We allow this here since we can't pass in &dyn Code as that would taint the
 // overlying object with lifetimes.
@@ -134,7 +134,7 @@ impl fmt::Debug for Create {
 
 /// This is control plane
 pub(crate) enum ManagerMsg {
-    Create(async_std::sync::Sender<Result<Addr>>, Box<Create>),
+    Create(async_channel::Sender<Result<Addr>>, Box<Create>),
     Stop,
 }
 
@@ -162,7 +162,7 @@ impl Manager {
 
     async fn offramp_thread(
         &self,
-        r: async_std::sync::Sender<Result<Addr>>,
+        r: async_channel::Sender<Result<Addr>>,
         Create {
             codec,
             mut offramp,
@@ -170,15 +170,15 @@ impl Manager {
             mut metrics_reporter,
             id,
         }: Create,
-    ) {
+    ) -> Result<()> {
         if let Err(e) = offramp.start(codec.borrow(), &postprocessors).await {
             error!("Failed to create onramp {}: {}", id, e);
-            return;
+            return Err(e);
         }
 
-        let (tx, rx) = channel(self.qsize);
+        let (tx, rx) = bounded(self.qsize);
         let offramp_id = id.clone();
-        task::spawn(async move {
+        task::spawn::<_, Result<()>>(async move {
             let mut pipelines: HashMap<TremorURL, pipeline::Addr> = HashMap::new();
             info!("[Offramp::{}] started", offramp_id);
 
@@ -245,17 +245,19 @@ impl Manager {
                         if r {
                             info!("[Offramp::{}] Marked as done ", offramp_id);
                         }
-                        tx.send(r).await
+                        tx.send(r).await?
                     }
                 }
             }
             info!("[Offramp::{}] stopped", offramp_id);
+            Ok(())
         });
-        r.send(Ok(tx)).await
+        r.send(Ok(tx)).await?;
+        Ok(())
     }
 
-    pub fn start(self) -> (JoinHandle<bool>, Sender) {
-        let (tx, rx) = channel(64);
+    pub fn start(self) -> (JoinHandle<Result<()>>, Sender) {
+        let (tx, rx) = bounded(64);
         let h = task::spawn(async move {
             info!("Onramp manager started");
             while let Ok(msg) = rx.recv().await {
@@ -264,12 +266,12 @@ impl Manager {
                         info!("Stopping onramps...");
                         break;
                     }
-                    ManagerMsg::Create(r, c) => self.offramp_thread(r, *c).await,
+                    ManagerMsg::Create(r, c) => self.offramp_thread(r, *c).await?,
                 };
                 info!("Stopping onramps...");
             }
             info!("Onramp manager stopped.");
-            true
+            Ok(())
         });
 
         (h, tx)

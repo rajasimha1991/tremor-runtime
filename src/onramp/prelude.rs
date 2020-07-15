@@ -22,7 +22,7 @@ pub(crate) use crate::source::{Source, SourceManager, SourceReply, SourceState};
 pub(crate) use crate::system::METRICS_PIPELINE;
 pub(crate) use crate::url::TremorURL;
 pub(crate) use crate::utils::{hostname, nanotime, ConfigImpl};
-pub(crate) use async_std::sync::{channel, Receiver};
+pub(crate) use async_channel::{bounded, Receiver};
 pub(crate) use async_std::task;
 pub(crate) use tremor_pipeline::{CBAction, Event, EventOriginUri, Ids};
 use tremor_script::LineValue;
@@ -197,7 +197,7 @@ pub(crate) async fn handle_pipelines_msg(
                 Ok(PipeHandlerResult::Idle)
             }
             onramp::Msg::Disconnect { tx, .. } => {
-                tx.send(true).await;
+                tx.send(true).await?;
                 Ok(PipeHandlerResult::Terminate)
             }
             onramp::Msg::Cb(cb, ids) => Ok(PipeHandlerResult::Cb(cb, ids)),
@@ -211,10 +211,10 @@ pub(crate) async fn handle_pipelines_msg(
             onramp::Msg::Disconnect { id, tx } => {
                 pipelines.retain(|(pipeline, _)| pipeline != &id);
                 if pipelines.is_empty() {
-                    tx.send(true).await;
+                    tx.send(true).await?;
                     Ok(PipeHandlerResult::Terminate)
                 } else {
-                    tx.send(false).await;
+                    tx.send(false).await?;
                     Ok(PipeHandlerResult::Normal)
                 }
             }

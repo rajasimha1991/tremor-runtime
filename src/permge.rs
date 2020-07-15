@@ -19,10 +19,10 @@ use core::task::{Context, Poll};
 use pin_project_lite::pin_project;
 
 use crate::pipeline::{CfMsg, MgmtMsg, Msg};
+use async_channel::{Receiver, TryRecvError};
 use async_std::stream::Fuse;
 use async_std::stream::Stream;
 use async_std::stream::StreamExt;
-use async_std::sync::{Receiver, TryRecvError};
 use async_std::task;
 
 pin_project! {

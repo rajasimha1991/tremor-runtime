@@ -26,7 +26,7 @@ use tremor_pipeline::query;
 pub(crate) type Id = TremorURL;
 pub(crate) use crate::OffRamp as OfframpArtefact;
 pub(crate) use crate::OnRamp as OnrampArtefact;
-use async_std::sync::channel;
+use async_channel::bounded;
 use async_trait::async_trait;
 
 /// A Binding
@@ -241,7 +241,7 @@ impl Artefact for OfframpArtefact {
         };
         let metrics_reporter = RampReporter::new(servant_id.clone(), self.metrics_interval_s);
 
-        let (tx, rx) = channel(1);
+        let (tx, rx) = bounded(1);
 
         world
             .system
@@ -255,7 +255,7 @@ impl Artefact for OfframpArtefact {
                     metrics_reporter,
                 },
             ))
-            .await;
+            .await?;
         rx.recv().await?
     }
     async fn link(
@@ -274,7 +274,7 @@ impl Artefact for OfframpArtefact {
                             id: pipeline_id,
                             addr: Box::new(pipeline),
                         })
-                        .await;
+                        .await?;
                 };
             }
             Ok(true)
@@ -291,14 +291,14 @@ impl Artefact for OfframpArtefact {
     ) -> Result<Self::LinkResult> {
         info!("Linking offramp {} ..", id);
         if let Some(offramp) = system.reg.find_offramp(id).await? {
-            let (tx, rx) = channel(mappings.len());
+            let (tx, rx) = bounded(mappings.len());
             for (_this, pipeline_id) in mappings {
                 offramp
                     .send(offramp::Msg::Disconnect {
                         id: pipeline_id,
                         tx: tx.clone(),
                     })
-                    .await;
+                    .await?;
             }
             while let Ok(empty) = rx.recv().await {
                 if empty {
@@ -347,7 +347,7 @@ impl Artefact for OnrampArtefact {
             vec![]
         };
         let metrics_reporter = RampReporter::new(servant_id.clone(), self.metrics_interval_s);
-        let (tx, rx) = channel(1);
+        let (tx, rx) = bounded(1);
 
         world
             .system
@@ -361,7 +361,7 @@ impl Artefact for OnrampArtefact {
                     metrics_reporter,
                 },
             ))
-            .await;
+            .await?;
         rx.recv().await?
     }
 
@@ -379,7 +379,7 @@ impl Artefact for OnrampArtefact {
                     if let Some(pipeline) = system.reg.find_pipeline(&to).await? {
                         onramp
                             .send(onramp::Msg::Connect(vec![(to.clone(), pipeline)]))
-                            .await;
+                            .await?;
                     } else {
                         return Err(format!("Pipeline {:?} not found", to).into());
                     }
@@ -401,7 +401,7 @@ impl Artefact for OnrampArtefact {
     ) -> Result<bool> {
         if let Some(onramp) = system.reg.find_onramp(id).await? {
             let mut links = Vec::new();
-            let (tx, rx) = channel(mappings.len());
+            let (tx, rx) = bounded(mappings.len());
 
             for to in mappings.values() {
                 links.push(to.to_owned())
@@ -412,7 +412,7 @@ impl Artefact for OnrampArtefact {
                         id: pipeline_id,
                         tx: tx.clone(),
                     })
-                    .await;
+                    .await?;
             }
             while let Ok(empty) = rx.recv().await {
                 if empty {

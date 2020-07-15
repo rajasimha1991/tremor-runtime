@@ -143,6 +143,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-channel"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee81ba99bee79f3c8ae114ae4baa7eaa326f63447cf2ec65e4393618b63f8770"
+dependencies = [
+ "concurrent-queue",
+ "event-listener",
+ "futures-core",
+]
+
+[[package]]
 name = "async-compression"
 version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1215,6 +1226,12 @@ dependencies = [
  "backtrace",
  "version_check 0.9.2",
 ]
+
+[[package]]
+name = "event-listener"
+version = "2.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "699d84875f1b72b4da017e6b0f77dfa88c0137f089958a88974d15938cbc2976"
 
 [[package]]
 name = "failure"
@@ -4951,6 +4968,7 @@ dependencies = [
 name = "tremor-runtime"
 version = "0.8.0"
 dependencies = [
+ "async-channel",
  "async-compression",
  "async-std",
  "async-trait",
@@ -4960,7 +4978,6 @@ dependencies = [
  "bytes 0.5.5",
  "chrono",
  "cron",
- "crossbeam-channel 0.4.2",
  "elastic",
  "env_logger",
  "error-chain 0.12.2",
@@ -5002,7 +5019,6 @@ dependencies = [
  "snap",
  "surf",
  "tempfile",
- "threadpool",
  "tokio-postgres",
  "tremor-influx 0.1.0",
  "tremor-pipeline",
